@@ -9,9 +9,9 @@ import os
 import json
 import time
 import shutil
-import asyncio
 import uvicorn
 import zipfile
+import threading
 import subprocess
 from utils.UUID import UUID
 from fastapi import UploadFile
@@ -19,12 +19,10 @@ from collections import OrderedDict
 from config.app_config import init_config
 from fastapi.responses import JSONResponse
 from utils.model_handler import ModelHandler
-from utils.cleanup import cleanup_model_cuda_cache
+from utils.cleanup import cleanup_cuda_cache
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Request, Form
 from utils.check_installed_package import check_package_installed
-
-# from fastapi import APIRouter
 
 model_instances = OrderedDict()
 model_cleanup_interval = init_config.model_cleanup_interval
@@ -47,18 +45,19 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Hello AI Applications!"}
+    return {"message": "Hello AI World!"}
 
 
-async def cleanup_model():
+def cleanup_model():
     while True:
-        await asyncio.sleep(model_cleanup_interval)  # 每隔一小时处理一次模型实例
+        time.sleep(model_cleanup_interval)  # 每隔一小时处理一次模型实例
         if len(model_instances) > 0:
             lru_model = next(iter(model_instances))
             model_instances.move_to_end(lru_model)
             lru_model.model = None
             lru_model.model_initialized = False
-            cleanup_model_cuda_cache()
+            print("lru_model", lru_model)
+            cleanup_cuda_cache()
 
 
 def create_dynamic_route(model_repo: str, model_dir: str):
@@ -154,6 +153,7 @@ async def upload_model(file: UploadFile = Form(...)):
 
         # 动态添加路由
         create_dynamic_route(model_repo, model_dir)
+
         model_count += 1
         return JSONResponse(content={"message": "模型上传成功", "model_uuid": model_dir})
     except Exception as e:
@@ -216,38 +216,8 @@ async def upload_predict_data_file(file: UploadFile = Form(...)):
 # 初始加载已有的模型路由
 update_dynamic_routes(model_repo)
 
-asyncio.ensure_future(cleanup_model())
-
-'''
-class ModelFolderEventHandler(FileSystemEventHandler):
-    def on_deleted(self, event):
-        if event.is_directory:
-            folder_path = event.src_path
-            if not os.path.exists(folder_path):
-                print(folder_path, "is deleted")
-                app.router.routes = [route for route in app.router.routes if route.path != f"/predict/{folder_path}"]
-
-def start_watchdog(observer, event_handler, path):
-    observer.schedule(event_handler, path=path, recursive=False)
-    observer.start()
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
-
-# 创建 Observer 和相关资源
-event_handler = ModelFolderEventHandler()
-observer = Observer()
-
-# 在应用程序退出时停止和清理 Observer 实例
-atexit.register(lambda: observer.stop())
-
-# 启动 watchdog 监听文件夹变化
-watchdog_thread = threading.Thread(target=start_watchdog, args=(observer, event_handler, model_repo))
-watchdog_thread.start()
-'''
+cleanup_thread = threading.Thread(target=cleanup_model)
+cleanup_thread.start()
 
 if __name__ == '__main__':
     uvicorn.run(app, port=8008)

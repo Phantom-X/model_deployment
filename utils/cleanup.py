@@ -5,7 +5,10 @@
 @Email: 2909981736@qq.com
 """
 import torch
+import gc
 
 
-def cleanup_model_cuda_cache():
+def cleanup_cuda_cache():
     torch.cuda.empty_cache()
+    gc.collect()
+

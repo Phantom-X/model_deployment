@@ -6,8 +6,9 @@
 """
 import os
 import json
-from utils.dynamic_load import get_class_in_module
 import torch
+from utils.cleanup import cleanup_cuda_cache
+from utils.dynamic_load import get_class_in_module
 
 
 class ModelHandler:
@@ -44,7 +45,10 @@ class ModelHandler:
             output = self.model(tensor)
 
         resp = self.postprocess(output, self.config)
-
+        tensor = None
+        output = None
+        cleanup_cuda_cache()
+        print("tensor, output", tensor, output)
         print(f"Predicting with model: {self.model_name}")
         return {"model_name": self.model_name, "prediction": resp}
 

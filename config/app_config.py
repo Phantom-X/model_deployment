@@ -12,7 +12,7 @@ class Init_Config(BaseSettings):
     model_repo: str = "model_repo"
     model_temp: str = "temp"
     max_model_count: int = 520
-    model_cleanup_interval: int = 20  # 每隔一小时处理一次模型实例
+    model_cleanup_interval: int = 20  # 每隔20s处理一次模型实例
 
 
 @lru_cache
