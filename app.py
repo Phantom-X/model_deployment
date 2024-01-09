@@ -225,7 +225,6 @@ async def get_server_resource_occupation():
         return HTTPException(status_code=516, detail=f"服务器资源占用查询失败，错误原因：{str(e)}")
 
 
-
 # 初始加载已有的模型路由
 update_dynamic_routes(model_repo)
 
