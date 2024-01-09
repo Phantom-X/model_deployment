@@ -13,6 +13,7 @@ import uvicorn
 import zipfile
 import threading
 import subprocess
+from utils.get_resource_occupation import get_resource_occupation
 from utils.UUID import UUID
 from fastapi import UploadFile
 from collections import OrderedDict
@@ -211,6 +212,18 @@ async def upload_predict_data_file(file: UploadFile = Form(...)):
         return JSONResponse(content={"message": "文件上传成功", "file_path": predict_data_file_path})
     except Exception as e:
         return HTTPException(status_code=515, detail=f"上传测试数据文件失败，错误原因：{str(e)}")
+
+
+@app.get("/get_server_resource_occupation")
+async def get_server_resource_occupation():
+    try:
+        cpu_usage, gpu_memory_usage, memory_usage, disk_usage = get_resource_occupation(os.getcwd())
+        return JSONResponse(
+            content={"message": "服务器资源占用查询成功", "cpu_usage": cpu_usage, "gpu_memory_usage": gpu_memory_usage,
+                     "memory_usage": memory_usage, "disk_usage": disk_usage})
+    except Exception as e:
+        return HTTPException(status_code=516, detail=f"服务器资源占用查询失败，错误原因：{str(e)}")
+
 
 
 # 初始加载已有的模型路由
