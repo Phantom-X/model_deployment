@@ -27,6 +27,7 @@ from utils.check_installed_package import check_package_installed
 
 model_instances = OrderedDict()
 model_cleanup_interval = init_config.model_cleanup_interval
+tempdir_cleanup_interval = init_config.tempdir_cleanup_interval
 model_repo = init_config.model_repo
 model_temp = init_config.model_temp
 max_model_count = init_config.max_model_count
@@ -49,18 +50,6 @@ async def root():
     return {"message": "Hello AI World!"}
 
 
-def cleanup_model():
-    while True:
-        time.sleep(model_cleanup_interval)  # 每隔一小时处理一次模型实例
-        if len(model_instances) > 0:
-            lru_model = next(iter(model_instances))
-            model_instances.move_to_end(lru_model)
-            lru_model.model = None
-            lru_model.model_initialized = False
-            print("lru_model", lru_model)
-            cleanup_cuda_cache()
-
-
 def create_dynamic_route(model_repo: str, model_dir: str):
     model_instance = ModelHandler(model_repo, model_dir)
 
@@ -81,14 +70,13 @@ def create_dynamic_route(model_repo: str, model_dir: str):
 def update_dynamic_routes(model_repo: str):
     for model_dir in os.listdir(model_repo):
         model_dir_path = os.path.join(model_repo, model_dir)
-        if not os.path.isdir(model_dir_path) or model_dir == "__pycache__":
-            continue
-        # 检查是否已经存在对应的路由，避免重复创建
-        predict_route_exists = any(
-            route.path == f"/predict/{model_repo}/{model_dir}" and "POST" in route.methods for route in
-            app.router.routes)
-        if not predict_route_exists:
-            create_dynamic_route(model_repo, model_dir)
+        if os.path.isdir(model_dir_path):
+            # 检查是否已经存在对应的路由，避免重复创建
+            predict_route_exists = any(
+                route.path == f"/predict/{model_repo}/{model_dir}" and "POST" in route.methods for route in
+                app.router.routes)
+            if not predict_route_exists:
+                create_dynamic_route(model_repo, model_dir)
 
 
 @app.get("/select_model")
@@ -225,11 +213,39 @@ async def get_server_resource_occupation():
         return HTTPException(status_code=516, detail=f"服务器资源占用查询失败，错误原因：{str(e)}")
 
 
+def cleanup_model():
+    while True:
+        time.sleep(model_cleanup_interval)  # 每隔一小时处理一次模型实例
+        if len(model_instances) > 0:
+            lru_model = next(iter(model_instances))
+            model_instances.move_to_end(lru_model)
+            lru_model.model = None
+            lru_model.model_initialized = False
+            print("lru_model", lru_model)
+            cleanup_cuda_cache()
+
+
+def cleanup_temp():
+    while True:
+        time.sleep(tempdir_cleanup_interval)  # 每隔一小时处理一次模型实例
+        current_time = time.time()
+        files = os.listdir(model_temp)
+        for file in files:
+            file_path = os.path.join(model_temp, file)
+            file_create_time = os.path.getctime(file_path)
+            time_difference = current_time - file_create_time
+            if time_difference > tempdir_cleanup_interval:
+                if os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+
+
 # 初始加载已有的模型路由
 update_dynamic_routes(model_repo)
 
-cleanup_thread = threading.Thread(target=cleanup_model)
-cleanup_thread.start()
+cleanup_model_thread = threading.Thread(target=cleanup_model)
+cleanup_model_thread.start()
+cleanup_tempdir_thread = threading.Thread(target=cleanup_temp)
+cleanup_tempdir_thread.start()
 
 if __name__ == '__main__':
     uvicorn.run(app, port=8008)
