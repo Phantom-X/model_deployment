@@ -13,7 +13,7 @@ class Init_Config(BaseSettings):
     model_temp: str = "temp"
     max_model_count: int = 520
     model_cleanup_interval: int = 1  # 每隔1s处理一次模型实例
-    tempdir_cleanup_interval: int = 3600  # 每隔1小时处理一次temp文件夹
+    tempdir_cleanup_interval: int = 1800  # 每隔0.5小时处理一次temp文件夹
 
 
 @lru_cache

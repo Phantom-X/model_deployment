@@ -20,6 +20,7 @@ class ModelHandler:
         with open(os.path.join(model_repo, self.model_dir, 'config.json')) as f:
             self.config = json.load(f)
         self.model_name = self.config["model_name"]
+        self.weight_load_method = self.config["weight_load_method"]
         self.preprocess = get_class_in_module(self.config["preprocess_function"],
                                               os.path.join(model_repo, self.model_dir,
                                                            self.config["preprocess_function"]))
@@ -29,8 +30,23 @@ class ModelHandler:
 
     def initialize_model(self):
         Model = get_class_in_module(self.model_name, os.path.join(self.model_repo, self.model_dir, self.model_name))
-        model = Model(**self.config["model_params"])
-        model.load_state_dict(torch.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"])))
+        try:
+            if self.weight_load_method == "" or self.weight_load_method == "default":
+                model = Model(**self.config["model_params"])
+                model.load_state_dict(
+                    torch.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"])))
+                model.eval()
+            elif self.weight_load_method == "jit":
+                model = torch.jit.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"]))
+            elif self.weight_load_method == "ultralytics":
+                model = Model(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"]))
+            elif self.weight_load_method == "transformers":
+                raise Exception(f"暂未开通，请等待后续平台升级，weight_load_method={self.weight_load_method}")
+            else:
+                raise Exception(f"没有这种模型权重导入方式，weight_load_method={self.weight_load_method}")
+        except Exception as e:
+            raise Exception(f"模型权重导入失败: {e}")
+
         device = self.config["gpu"] if torch.cuda.is_available() else "cpu"
         self.model = model.to(device)
         print(f"Initializing model: {self.model_name}")
@@ -39,19 +55,20 @@ class ModelHandler:
     def predict(self, input_data):
         if not self.model_initialized:
             self.initialize_model()
-        self.model.eval()
         tensor = self.preprocess(input_data, self.config)
         with torch.no_grad():
-            output = self.model(tensor)
+            if isinstance(tensor, dict):
+                output = self.model(**tensor)
+            else:
+                output = self.model(tensor)
         resp = self.postprocess(output, self.config)
-
-        tensor = None
-        output = None
         cleanup_cuda_cache()
-        print("tensor, output", tensor, output)
 
         print(f"Predicting with model: {self.model_name}")
-        return {"model_name": self.model_name, "prediction": resp}
+        return {"predict": resp}
+
+    def eval(self):
+        pass
 
     def train(self):
         pass

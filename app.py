@@ -54,15 +54,22 @@ def create_dynamic_route(model_repo: str, model_dir: str):
     model_instance = ModelHandler(model_repo, model_dir)
 
     # 创建predict的路由
-    @app.post(f"/predict/{model_repo}/{model_dir}")
-    async def make_prediction_dynamic(input_data: dict):
+    @app.post(f"/{model_repo}/{model_dir}")
+    async def make_prediction_dynamic(input_data: dict, task: str = "predict"):
         try:
             if model_instance not in model_instances:
                 model_instances[model_instance] = time.time()
             else:
                 model_instances.move_to_end(model_instance)
-            result = model_instance.predict(input_data)
-            return JSONResponse(content=result)
+            if task == "predict":
+                result = model_instance.predict(input_data)
+                return JSONResponse(content=result)
+            elif task == "train":
+                raise HTTPException(status_code=500, detail=f"task={task}暂未开通,请等待后续平台升级")
+            elif task == "eval":
+                raise HTTPException(status_code=500, detail=f"task={task}暂未开通,请等待后续平台升级")
+            else:
+                raise HTTPException(status_code=500, detail=f"没有该任务，task={task}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -70,10 +77,10 @@ def create_dynamic_route(model_repo: str, model_dir: str):
 def update_dynamic_routes(model_repo: str):
     for model_dir in os.listdir(model_repo):
         model_dir_path = os.path.join(model_repo, model_dir)
-        if os.path.isdir(model_dir_path):
+        if os.path.isdir(model_dir_path) and model_dir != "__pycache__":
             # 检查是否已经存在对应的路由，避免重复创建
             predict_route_exists = any(
-                route.path == f"/predict/{model_repo}/{model_dir}" and "POST" in route.methods for route in
+                route.path == f"/{model_repo}/{model_dir}" and "POST" in route.methods for route in
                 app.router.routes)
             if not predict_route_exists:
                 create_dynamic_route(model_repo, model_dir)
@@ -84,9 +91,9 @@ async def select_model(request: Request):
     try:
         host = request.headers.get("Host")
         model_route = []
-        for route in [route for route in app.router.routes if f"/predict/{model_repo}/" in route.path]:
+        for route in [route for route in app.router.routes if f"/{model_repo}/" in route.path]:
             model_predict_api = f"http://{host}{route.path}"
-            with open(os.path.join(route.path.replace("/predict/", ""), 'config.json')) as f:
+            with open(os.path.join(route.path.replace("/", "", 1), 'config.json')) as f:
                 model_config = json.load(f)
             model_route.append({"model_predict_api": model_predict_api, "model_config": model_config})
 
@@ -99,9 +106,9 @@ async def select_model(request: Request):
 async def select_model_by_uuid(model_uuid: str, request: Request):
     try:
         host = request.headers.get("Host")
-        for route in [route for route in app.router.routes if f"/predict/{model_repo}/{model_uuid}" in route.path]:
+        for route in [route for route in app.router.routes if f"/{model_repo}/{model_uuid}" in route.path]:
             model_predict_api = f"http://{host}{route.path}"
-            with open(os.path.join(route.path.replace("/predict/", ""), 'config.json')) as f:
+            with open(os.path.join(route.path.replace("/", "", 1), 'config.json')) as f:
                 model_config = json.load(f)
             return JSONResponse(content={"model_predict_api": model_predict_api, "model_config": model_config})
         return JSONResponse(content={"model_predict_api": None, "model_config": None})
@@ -157,7 +164,7 @@ async def deleted_model(model_uuid: str):
         try:
             shutil.rmtree(folder_path)
             print(folder_path, "is deleted")
-            app.router.routes = [route for route in app.router.routes if route.path != f"/predict/{folder_path}"]
+            app.router.routes = [route for route in app.router.routes if route.path != f"/{folder_path}"]
             return {"message": f"Folder '{model_uuid}' deleted successfully"}
         except OSError as e:
             raise HTTPException(status_code=513, detail=f"Error deleting model '{model_uuid}': {str(e)}")
@@ -166,7 +173,7 @@ async def deleted_model(model_uuid: str):
 
 
 @app.get("/install_package")
-async def install_package(package: str, version: str, mirror: str = None):
+async def install_package(package: str, version: str = None, mirror: str = None):
     package = package.strip()
     if "=" in package:
         package = package.split("=")[0]
@@ -174,13 +181,15 @@ async def install_package(package: str, version: str, mirror: str = None):
     if is_installed:
         return HTTPException(status_code=514, detail=f"安装失败，({package})已经被安装了，版本：{is_installed}")
     try:
-        package = f"{package}=={version}"
-        if isinstance(mirror, str):
-            mirror = mirror.strip()
-        if mirror is None or mirror == "":
+        if version is not None:
+            if version.strip() != "":
+                package = f"{package}=={version}"
+        if mirror is None:
+            subprocess.check_call(["pip", "install", package])
+        elif mirror.strip() == "":
             subprocess.check_call(["pip", "install", package])
         else:
-            subprocess.check_call(["pip", "install", "--index-url", mirror, package])
+            subprocess.check_call(["pip", "install", "--index-url", mirror.strip(), package])
         return HTTPException(status_code=200, detail=f"安装成功：{package}")
     except subprocess.CalledProcessError as e:
         return HTTPException(status_code=514, detail=f"安装失败，安装库时发生错误: {str(e)}")
@@ -216,13 +225,13 @@ async def get_server_resource_occupation():
 def cleanup_model():
     while True:
         time.sleep(model_cleanup_interval)  # 每隔一小时处理一次模型实例
-        if len(model_instances) > 0:
+        if len(model_instances) > 5:
             lru_model = next(iter(model_instances))
-            model_instances.move_to_end(lru_model)
+            print("lru_model", type(lru_model.model).__name__)
             lru_model.model = None
             lru_model.model_initialized = False
-            print("lru_model", lru_model)
             cleanup_cuda_cache()
+            model_instances.move_to_end(lru_model)
 
 
 def cleanup_temp():
