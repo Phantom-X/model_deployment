@@ -52,9 +52,11 @@ class ModelHandler:
         return {"predict": resp}
 
     def eval(self):
+        # TODO:评估函数
         pass
 
     def train(self):
+        # TODO:训练函数
         pass
 
     def load_weights(self, Model):
