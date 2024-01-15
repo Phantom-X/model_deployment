@@ -16,7 +16,7 @@ class Init_Config(BaseSettings):
     tempdir_cleanup_interval: int = 1800  # 每隔0.5小时处理一次temp文件夹
     eureka_registration_server: str = "http://100.100.30.52:7895"  # http://100.100.30.52:7895
     app_name: str = "model-deployment-app"
-    instance_port: int = 9009
+    instance_port: int = 8008
     instance_host: str = "0.0.0.0"
 
 

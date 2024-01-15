@@ -30,23 +30,7 @@ class ModelHandler:
 
     def initialize_model(self):
         Model = get_class_in_module(self.model_name, os.path.join(self.model_repo, self.model_dir, self.model_name))
-        try:
-            if self.weight_load_method == "" or self.weight_load_method == "default":
-                model = Model(**self.config["model_params"])
-                model.load_state_dict(
-                    torch.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"])))
-                model.eval()
-            elif self.weight_load_method == "jit":
-                model = torch.jit.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"]))
-            elif self.weight_load_method == "ultralytics":
-                model = Model(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"]))
-            elif self.weight_load_method == "transformers":
-                raise Exception(f"暂未开通，请等待后续平台升级，weight_load_method={self.weight_load_method}")
-            else:
-                raise Exception(f"没有这种模型权重导入方式，weight_load_method={self.weight_load_method}")
-        except Exception as e:
-            raise Exception(f"模型权重导入失败: {e}")
-
+        model = self.load_weights(Model)
         device = self.config["gpu"] if torch.cuda.is_available() else "cpu"
         self.model = model.to(device)
         print(f"Initializing model: {self.model_name}")
@@ -72,3 +56,23 @@ class ModelHandler:
 
     def train(self):
         pass
+
+    def load_weights(self, Model):
+        try:
+            if self.weight_load_method == "" or self.weight_load_method == "default":
+                model = Model(**self.config["model_params"])
+                model.load_state_dict(
+                    torch.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"])))
+                model.eval()
+            elif self.weight_load_method == "jit":
+                model = torch.jit.load(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"]))
+            elif self.weight_load_method == "ultralytics":
+                model = Model(os.path.join(self.model_repo, self.model_dir, self.config["model_weights"]))
+            elif self.weight_load_method == "transformers":
+                raise Exception(f"暂未开通，请等待后续平台升级，weight_load_method={self.weight_load_method}")
+            else:
+                raise Exception(f"没有这种模型权重导入方式，weight_load_method={self.weight_load_method}")
+        except Exception as e:
+            raise Exception(f"模型权重导入失败: {e}")
+
+        return model
