@@ -254,7 +254,7 @@ async def register_eureka():
     if init_config.eureka_registration_server != "":
         await eureka_client.init_async(eureka_server=init_config.eureka_registration_server,  # eureka注册服务器
                                        app_name=init_config.app_name,  # 自身服务名称
-                                       instance_port=init_config.instance_port,  # 部署的
+                                       instance_port=init_config.instance_port,  # 部署的port
                                        instance_host=init_config.instance_host)  # 部署的host
 
 
