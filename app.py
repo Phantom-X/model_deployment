@@ -9,6 +9,7 @@ import os
 import json
 import time
 import shutil
+import asyncio
 import uvicorn
 import zipfile
 import threading
@@ -22,6 +23,7 @@ from fastapi.responses import JSONResponse
 from utils.model_handler import ModelHandler
 from utils.cleanup import cleanup_cuda_cache
 from fastapi.middleware.cors import CORSMiddleware
+import py_eureka_client.eureka_client as eureka_client
 from fastapi import FastAPI, HTTPException, Request, Form
 from utils.check_installed_package import check_package_installed
 
@@ -248,6 +250,14 @@ def cleanup_temp():
                     shutil.rmtree(file_path)
 
 
+async def register_eureka():
+    if init_config.eureka_registration_server != "":
+        await eureka_client.init_async(eureka_server=init_config.eureka_registration_server,  # eureka注册服务器
+                                       app_name=init_config.app_name,  # 自身服务名称
+                                       instance_port=init_config.instance_port,  # 部署的
+                                       instance_host=init_config.instance_host)  # 部署的host
+
+
 # 初始加载已有的模型路由
 update_dynamic_routes(model_repo)
 
@@ -257,4 +267,5 @@ cleanup_tempdir_thread = threading.Thread(target=cleanup_temp)
 cleanup_tempdir_thread.start()
 
 if __name__ == '__main__':
-    uvicorn.run(app, port=8008)
+    asyncio.run(register_eureka())
+    uvicorn.run(app="app:app", host=init_config.instance_host, port=init_config.instance_port)
