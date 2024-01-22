@@ -238,7 +238,7 @@ def cleanup_model():
 
 def cleanup_temp():
     while True:
-        time.sleep(tempdir_cleanup_interval)  # 每隔一小时处理一次模型实例
+        time.sleep(tempdir_cleanup_interval)  # 每隔一小时处理一次temp文件夹
         current_time = time.time()
         files = os.listdir(model_temp)
         for file in files:
